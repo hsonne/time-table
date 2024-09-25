@@ -6,33 +6,26 @@
 # MAIN -------------------------------------------------------------------------
 if (FALSE)
 {
-  teacher_tables <- read_teacher_time_tables(
-    file = "C:/Users/hsonne/Downloads/Lehrer Neu 2024-2025.pdf"
-  )
+  file_classes <- "C:/Users/hsonne/Downloads/Klassen Neu2 024-2025.pdf"
+  file_teachers <- "C:/Users/hsonne/Downloads/Lehrer Neu 2024-2025.pdf"
   
-  teacher_data <- dplyr::bind_rows(.id = "teacher", lapply(teacher_tables, function(x) {
-    as.data.frame(tidyr::pivot_longer(
-      x, 
-      names(x)[-1L], 
-      names_to = "weekday", 
-      values_to = "class_room_subject"
-    ))
-  }))
+  teacher_tables <- read_time_tables(file = file_teachers)
+  teacher_data_raw <- merge_tables(teacher_tables, id = "teacher")
+  teacher_data <- split_composed_fields(teacher_data_raw)
+  lookup_teacher <- create_lookup_table_teacher(composed = teacher_data$composed)
+  full_teacher_data <- dplyr::left_join(teacher_data, lookup_teacher, by = "composed")
   
-  teacher_data <- teacher_data[teacher_data$class_room_subject != "", ]
-
-  lookup <- create_lookup_table(composed = sort(unique(teacher_data$class_room_subject)))
-
-  full_teacher_data <- dplyr::left_join(
-    x = teacher_data, 
-    y = lookup, 
-    by = c(class_room_subject = "composed")
-  )
+  class_tables <- read_time_tables(file = file_classes)
+  class_data_raw <- merge_tables(class_tables, id = "class")
+  class_data <- split_composed_fields(class_data_raw)
+  lookup_class <- create_lookup_table_class(composed = gsub("ESSEN (\\d)", "ESSEN-\\1", class_data$composed))
+  full_class_data <- dplyr::left_join(class_data, lookup_class, by = "composed")
   
-  View(full_teacher_data)
+  head(full_teacher_data)
+  head(full_class_data)
   
   by_class <- split(
-    kwb.utils::removeColumns(full_teacher_data, c("class", "class_room_subject")),
+    kwb.utils::removeColumns(full_teacher_data, c("class", "composed")),
     f = full_teacher_data$class
   )
   
@@ -40,14 +33,14 @@ if (FALSE)
   x$weekday <- factor(x$weekday, levels = c("Mo", "Di", "Mi", "Do", "Fr"))
 
   kwb.utils::moveColumnsToFront(
-    kwb.utils::orderBy(x, c("weekday", "Std")),
-    c("weekday", "Std", "subject", "room")
+    kwb.utils::orderBy(x, c("weekday", "hr")),
+    c("weekday", "hr", "subject", "room")
   )
   
 }
 
-# read_teacher_time_tables -----------------------------------------------------
-read_teacher_time_tables <- function(file)
+# read_time_tables -------------------------------------------------------------
+read_time_tables <- function(file)
 {
   # Read pdf file into list of pages
   pages <- suppressMessages(pdftools::pdf_text(file))
@@ -73,16 +66,15 @@ read_teacher_time_tables <- function(file)
       trimws(x)
     })
     names(data) <- substr(names(data), 1L, 2L)
-    kwb.utils::renameColumns(data, list(X = "Std"))
+    kwb.utils::renameColumns(data, list(X = "hr"))
   })
 
   names(tables) <- sapply(clean_pages, kwb.utils::selectElements, "teacher")
-  
-  # Which tables look already good?  
+
   failed <- !sapply(tables, looks_good)
-  
   tables[failed] <- lapply(tables[failed], repair_table)
-  
+  stopifnot(all(sapply(tables, looks_good)))
+    
   tables
 }
 
@@ -130,25 +122,28 @@ looks_good <- function(x)
 # repair_table -----------------------------------------------------------------
 repair_table <- function(x)
 {
-  indices <- which(x[, 1L] == "")
-  stopifnot(length(indices) == 2L)
-  stopifnot(diff(indices) == 2L)
+  all_indices <- which(x[, 1L] == "")
+  stopifnot(length(all_indices) %% 2L == 0L)
+  index_pairs <- matrix(all_indices, nrow = 2L)
+  stopifnot(all(index_pairs[2L, ] - index_pairs[1L, ] == 2L))
   
-  which_filled <- which(as.matrix(x[indices, ]) != "", arr.ind = TRUE)
-  stopifnot(nrow(which_filled) == 2L)
-  cols <- unname(which_filled[, "col"])
-  stopifnot(kwb.utils::allAreEqual(cols))
-  i <- indices[1L] + 1L
-  j <- cols[1L]
-  old <- x[i, j]
-  stopifnot(old == "")
-  x[i, j] <- paste(x[indices, j], collapse = "/")
-  x[-indices, ]
+  for (pair_index in seq_len(ncol(index_pairs))) {
+    indices <- index_pairs[, pair_index]
+    i1 <- indices[1L]
+    i2 <- indices[2L]
+    new_values <- unname(apply(x[i1:i2, ], 2L, function(x) {
+      paste(x[x != ""], collapse = "/")
+    }))
+    x[i1 + 1L, ] <- gsub("\\s+", " ", new_values)
+  }
+  
+  x[-all_indices, ]
 }
 
-# create_lookup_table ----------------------------------------------------------
-create_lookup_table <- function(composed)
+# create_lookup_table_teacher --------------------------------------------------
+create_lookup_table_teacher <- function(composed)
 {
+  composed <- sort(unique(composed))
   parts <- strsplit(composed, "\\s+")
   n_parts <- lengths(parts)
 
@@ -164,56 +159,105 @@ create_lookup_table <- function(composed)
   is_room_pair <- n_parts == 2L & first_is_room
   
   lookup_class_triple <- cbind(
-    data.frame(composed = composed[is_class_triple]),
-    as.data.frame(matrix(
-      unlist(parts[is_class_triple]), 
-      ncol = 3L, 
-      byrow = TRUE, 
-      dimnames = list(NULL, c("class", "room", "subject"))
-    ))
-  )
-
-  lookup_class_pair <- cbind(
-    data.frame(composed = composed[is_class_pair]),
-    as.data.frame(matrix(
-      unlist(parts[is_class_pair]), 
-      ncol = 2L, 
-      byrow = TRUE, 
-      dimnames = list(NULL, c("class", "subject"))
-    ))
-  )
-
-  lookup_room_pair <- cbind(
-    data.frame(composed = composed[is_room_pair]),
-    as.data.frame(matrix(
-      unlist(parts[is_room_pair]), 
-      ncol = 2L, 
-      byrow = TRUE, 
-      dimnames = list(NULL, c("room", "subject"))
-    ))
+    split_into(x = parts[is_class_triple], columns = c("class", "room", "subject")),
+    composed = composed[is_class_triple]
   )
 
   subjects <- sort(unique(lookup_class_triple$subject))
   first_is_subject <- sapply(parts, `[`, 1L) %in% subjects
   is_subject_only <- n_parts == 1L & first_is_subject
   
-  lookup_subject_only <- cbind(
-    data.frame(composed = composed[is_subject_only]),
-    as.data.frame(matrix(
-      unlist(parts[is_subject_only]), 
-      ncol = 1L, 
-      byrow = TRUE, 
-      dimnames = list(NULL, c("subject"))
-    ))
-  )
-  
   considered <- is_class_triple | is_class_pair | is_room_pair | is_subject_only
   print(parts[!considered])
 
-  dplyr::bind_rows(
+  combined <- dplyr::bind_rows(
     lookup_class_triple, 
-    lookup_class_pair, 
-    lookup_room_pair,
-    lookup_subject_only
+    cbind(
+      split_into(x = parts[is_class_pair], columns = c("class", "subject")),
+      composed = composed[is_class_pair]
+    ),
+    cbind(
+      split_into(x = parts[is_room_pair], columns = c("room", "subject")),
+      composed = composed[is_room_pair]
+    ),
+    cbind(
+      split_into(x = parts[is_subject_only], columns = c("subject")),
+      composed = composed[is_subject_only]
+    )
   )
+  
+  kwb.utils::moveColumnsToFront(combined, "composed")
+}
+
+# create_lookup_table_class ----------------------------------------------------
+create_lookup_table_class <- function(composed)
+{
+  composed <- sort(unique(composed))
+  parts <- strsplit(composed, "\\s+")
+  n_parts <- lengths(parts)
+
+  is_single <- n_parts == 1L  
+  is_pair <- n_parts == 2L
+  is_triple <- n_parts == 3L
+
+  combined <- dplyr::bind_rows(
+    cbind(
+      split_into(x = parts[is_triple], columns = c("subject", "room", "teacher")),
+      composed = composed[is_triple]
+    ),
+    cbind(
+      split_into(x = parts[is_pair], columns = c("subject", "teacher")),
+      composed = composed[is_pair]
+    ),
+    cbind(
+      split_into(x = parts[is_single], columns = c("teacher")),
+      composed = composed[is_single]
+    )
+  )
+
+  kwb.utils::moveColumnsToFront(combined, "composed")  
+}
+
+# split_into -------------------------------------------------------------------
+split_into <- function(x, columns)
+{
+  as.data.frame(matrix(
+    unlist(x), 
+    ncol = length(columns), 
+    byrow = TRUE, 
+    dimnames = list(NULL, columns)
+  ))
+}
+
+# merge_tables -----------------------------------------------------------------
+merge_tables <- function(tables, id)
+{
+  tables_long <- lapply(tables, function(data) {
+    as.data.frame(tidyr::pivot_longer(
+      data, 
+      names(data)[-1L], 
+      names_to = "weekday", 
+      values_to = "composed"
+    ))
+  })
+  
+  data <- dplyr::bind_rows(tables_long, .id = id)
+  data[data$composed != "", ]
+}
+
+# split_composed_fields --------------------------------------------------------
+split_composed_fields <- function(data)
+{
+  multi_field_indices <- grep("/", data$composed)
+  if (length(multi_field_indices) == 0L) {
+    return(data)
+  }
+  parts <- strsplit(data$composed[multi_field_indices], "/")
+  repeated <- kwb.utils::removeColumns(
+    data[rep(multi_field_indices, lengths(parts)), ],
+    "composed"
+  )
+  repeated$composed <- unlist(parts)
+  combined <- rbind(data[-multi_field_indices, ], repeated)
+  kwb.utils::resetRowNames(combined)
 }
