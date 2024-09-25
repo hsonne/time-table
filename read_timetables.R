@@ -21,7 +21,29 @@ if (FALSE)
   
   teacher_data <- teacher_data[teacher_data$class_room_subject != "", ]
 
-  View(teacher_data)  
+  lookup <- create_lookup_table(composed = sort(unique(teacher_data$class_room_subject)))
+
+  full_teacher_data <- dplyr::left_join(
+    x = teacher_data, 
+    y = lookup, 
+    by = c(class_room_subject = "composed")
+  )
+  
+  View(full_teacher_data)
+  
+  by_class <- split(
+    kwb.utils::removeColumns(full_teacher_data, c("class", "class_room_subject")),
+    f = full_teacher_data$class
+  )
+  
+  x <- by_class$`1A`
+  x$weekday <- factor(x$weekday, levels = c("Mo", "Di", "Mi", "Do", "Fr"))
+
+  kwb.utils::moveColumnsToFront(
+    kwb.utils::orderBy(x, c("weekday", "Std")),
+    c("weekday", "Std", "subject", "room")
+  )
+  
 }
 
 # read_teacher_time_tables -----------------------------------------------------
@@ -122,4 +144,76 @@ repair_table <- function(x)
   stopifnot(old == "")
   x[i, j] <- paste(x[indices, j], collapse = "/")
   x[-indices, ]
+}
+
+# create_lookup_table ----------------------------------------------------------
+create_lookup_table <- function(composed)
+{
+  parts <- strsplit(composed, "\\s+")
+  n_parts <- lengths(parts)
+
+  tokens <- sort(unique(unlist(parts)))
+  classes <- grep("\\d[A-Z]|AB\\d", tokens, value = TRUE)
+  rooms <- grep("^R_", tokens, value = TRUE)
+  
+  first_is_class <- sapply(parts, `[`, 1L) %in% classes
+  first_is_room <- sapply(parts, `[`, 1L) %in% rooms
+
+  is_class_triple <- n_parts == 3L & first_is_class
+  is_class_pair <- n_parts == 2L & first_is_class
+  is_room_pair <- n_parts == 2L & first_is_room
+  
+  lookup_class_triple <- cbind(
+    data.frame(composed = composed[is_class_triple]),
+    as.data.frame(matrix(
+      unlist(parts[is_class_triple]), 
+      ncol = 3L, 
+      byrow = TRUE, 
+      dimnames = list(NULL, c("class", "room", "subject"))
+    ))
+  )
+
+  lookup_class_pair <- cbind(
+    data.frame(composed = composed[is_class_pair]),
+    as.data.frame(matrix(
+      unlist(parts[is_class_pair]), 
+      ncol = 2L, 
+      byrow = TRUE, 
+      dimnames = list(NULL, c("class", "subject"))
+    ))
+  )
+
+  lookup_room_pair <- cbind(
+    data.frame(composed = composed[is_room_pair]),
+    as.data.frame(matrix(
+      unlist(parts[is_room_pair]), 
+      ncol = 2L, 
+      byrow = TRUE, 
+      dimnames = list(NULL, c("room", "subject"))
+    ))
+  )
+
+  subjects <- sort(unique(lookup_class_triple$subject))
+  first_is_subject <- sapply(parts, `[`, 1L) %in% subjects
+  is_subject_only <- n_parts == 1L & first_is_subject
+  
+  lookup_subject_only <- cbind(
+    data.frame(composed = composed[is_subject_only]),
+    as.data.frame(matrix(
+      unlist(parts[is_subject_only]), 
+      ncol = 1L, 
+      byrow = TRUE, 
+      dimnames = list(NULL, c("subject"))
+    ))
+  )
+  
+  considered <- is_class_triple | is_class_pair | is_room_pair | is_subject_only
+  print(parts[!considered])
+
+  dplyr::bind_rows(
+    lookup_class_triple, 
+    lookup_class_pair, 
+    lookup_room_pair,
+    lookup_subject_only
+  )
 }
