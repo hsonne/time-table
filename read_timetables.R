@@ -3,7 +3,10 @@
 # Source the whole script first
 #
 
-kwb.utils::loadFunctions("functions.R")
+kwb.utils::loadFunctions(c(
+  "functions.R",
+  "read_time_tables.R"
+))
 
 # Read all pdf files -----------------------------------------------------------
 {
