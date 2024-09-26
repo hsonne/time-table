@@ -68,15 +68,19 @@ kwb.utils::loadFunctions(c(
   v1 <- get_deu_combis("weekday_hr", "class", data = class_data_1)
   v2 <- get_deu_combis("weekday_hr", "class", data = class_data_2)
 
+  int_removed <- -1L
+  int_added <- 2L
   v1_v2_diff <- v2
-  v1_v2_diff[v1 == 0L & v2 == 1L] <- 2L # added
-  v1_v2_diff[v1 == 1L & v2 == 0L] <- -1L # removed
-
-  any_in_row <- function(x) rowSums(x) > 0L
-  filter_any_in_row <- function(x) x[any_in_row(x), ]
+  v1_v2_diff[v1 == 0L & v2 == 1L] <- int_added
+  v1_v2_diff[v1 == 1L & v2 == 0L] <- int_removed
+  has_changed <- v1_v2_diff == int_added | v1_v2_diff == int_removed
   
-  filter_any_in_row(v2)
-  v1_v2_diff[any_in_row(v1_v2_diff < 0L | v1_v2_diff > 1L), ]
+  any_in_row <- function(x) rowSums(x) > 0L
+  any_in_col <- function(x) colSums(x) > 0L
+  
+  v2[any_in_row(v2), ]
+  v1_v2_diff[any_in_row(has_changed), any_in_col(has_changed)]
+  v1_v2_diff
 }
 
 # Write data to text files for comparison -------------------------------------- 
