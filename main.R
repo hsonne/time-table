@@ -38,18 +38,45 @@ kwb.utils::loadFunctions(c(
   
   cmp(get_teachers(teacher_data), get_teachers(class_data_1))
   cmp(get_teachers(class_data_2), get_teachers(class_data_1))
+
+  get_weekday_hr <- function(data) factor(
+    kwb.utils::pasteColumns(data, c("weekday", "hr"), "-"), 
+    levels = grep("HP", invert = TRUE, value = TRUE, kwb.utils::pasteColumns(
+      kwb.utils::fullySorted(unique(data[, c("weekday", "hr")])), sep = "-"
+    ))
+  )
   
-  data <- class_data_2
-  data$weekday_hr <- kwb.utils::pasteColumns(data, c("weekday", "hr"), "-")
+  class_data_1$weekday_hr <- get_weekday_hr(class_data_1)
+  class_data_2$weekday_hr <- get_weekday_hr(class_data_2)
   
-  get_combis <- function(...) kwb.utils::countOrSum(data, c(...))
+  class_data <- class_data_1
+  
+  get_combis <- function(..., data = class_data) {
+    kwb.utils::countOrSum(data, c(...))
+  }
   
   get_combis("teacher", "subject")
   get_combis("subject", "teacher")
   get_combis("room", "subject")
   get_combis("room", "weekday")
   get_combis("weekday_hr", "room")
+
+  get_deu_combis <- function(..., data = class_data) {
+    as.matrix(kwb.utils::countOrSum(data[data$subject == "Deu", ], c(...)))
+  }
   
+  v1 <- get_deu_combis("weekday_hr", "class", data = class_data_1)
+  v2 <- get_deu_combis("weekday_hr", "class", data = class_data_2)
+
+  v1_v2_diff <- v2
+  v1_v2_diff[v1 == 0L & v2 == 1L] <- 2L # added
+  v1_v2_diff[v1 == 1L & v2 == 0L] <- -1L # removed
+
+  any_in_row <- function(x) rowSums(x) > 0L
+  filter_any_in_row <- function(x) x[any_in_row(x), ]
+  
+  filter_any_in_row(v2)
+  v1_v2_diff[any_in_row(v1_v2_diff < 0L | v1_v2_diff > 1L), ]
 }
 
 # Write data to text files for comparison -------------------------------------- 
