@@ -42,10 +42,7 @@ kwb.utils::loadFunctions(c(
   data <- class_data_2
   data$weekday_hr <- kwb.utils::pasteColumns(data, c("weekday", "hr"), "-")
   
-  get_combis <- function(...) {
-    #kwb.utils::fullySorted(unique(kwb.utils::selectColumns(data, c(...))))
-    kwb.utils::countOrSum(data, c(...), .sum_up)
-  }
+  get_combis <- function(...) kwb.utils::countOrSum(data, c(...))
   
   get_combis("teacher", "subject")
   get_combis("subject", "teacher")
