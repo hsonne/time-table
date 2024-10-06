@@ -1,26 +1,142 @@
+#file <- file_classes_3
+#kwb.utils::hsOpenWindowsExplorer(file)
+
 # get_full_teacher_table -------------------------------------------------------
 get_full_teacher_table <- function(file)
 {
-  teacher_tables <- read_time_tables(file)
+  tables <- read_time_tables(file)
+  teacher_tables <- repair_tables(tables)
   teacher_data_raw <- merge_tables(teacher_tables, id = "teacher")
   teacher_data <- split_composed_fields(teacher_data_raw)
   lookup_teacher <- create_lookup_table_teacher(composed = teacher_data$composed)
   dplyr::left_join(teacher_data, lookup_teacher, by = "composed")
 }
 
+# repair_tables ----------------------------------------------------------------
+repair_tables <- function(tables)
+{
+  failed <- !sapply(tables, looks_good)
+  tables[failed] <- lapply(tables[failed], repair_table)
+  stopifnot(all(sapply(tables, looks_good)))
+  tables
+}
+
+# looks_good -------------------------------------------------------------------
+looks_good <- function(x)
+{
+  look_for <- c(1:2, "HP1", 3:4,"HP2", 5:9)
+  nrow(x) == length(look_for) && all(x[, 1L] == look_for)
+}
+
+# repair_table -----------------------------------------------------------------
+repair_table <- function(data)
+{
+  #data <- tables[[1L]]
+  
+  keys <- data[, 1L]
+  
+  keys_1 <- fill_gaps_by_index(keys)
+  keys_2 <- fill_gaps_with_neighbours(keys)
+  
+  stopifnot(is.null(keys_1) || identical(keys_1, keys_2))
+  
+  data[, 1L] <- keys_2
+  
+  # Remove separator lines
+  data <- data[!grepl("^-+$", data[, 1L]), ]
+  
+  merge_fields_by_hour(data)
+}
+
+# fill_gaps_by_index -----------------------------------------------------------
+fill_gaps_by_index <- function(x)
+{
+  #x <- tables[[1L]]
+  empty_rows <- grep("^$", x)
+
+  raise_error <- function() {
+    message("filling gaps by index does not work. Returning NULL.")  
+  }
+ 
+  if (!length(empty_rows) %% 2L == 0L) {
+    raise_error()
+    return(NULL)
+  }
+  
+  row_pairs <- matrix(empty_rows, nrow = 2L)
+  
+  if (!all(row_pairs[2L, ] - row_pairs[1L, ] == 2L)) {
+    raise_error()
+    return(NULL)
+  }
+  
+  for (j in seq_len(ncol(row_pairs))) {
+    i <- row_pairs[, j]
+    x[c(i[1], i[2])] <- x[i[1] + 1L]
+  }
+  x
+}
+
+# fill_gaps_with_neighbours ----------------------------------------------------
+fill_gaps_with_neighbours <- function(
+    x, is_ok = is_key, prefer = function(a, b) a < b
+)
+{
+  left_of <- function(x) c("", x[-length(x)])
+  right_of <- function(x) c(x[-1L], "")
+  i_last <- NULL
+  while (TRUE) {
+    i <- which(x == "")
+    if (!is.null(i_last) && identical(i, i_last)) {
+      break
+    }
+    left <- left_of(x)[i]
+    right <- right_of(x)[i]
+    use_left <- is_ok(left) & (!is_ok(right) | prefer(left, right))
+    use_right <- is_ok(right) & (!is_ok(left) | prefer(right, left))
+    stopifnot(sum(use_left & use_right) == 0L)
+    #data.frame(left, right, use_left, use_right)
+    x[i[use_left]] <- left[use_left]
+    x[i[use_right]] <- right[use_right]
+    i_last <- i
+  }
+  x
+}
+
+# is_key -----------------------------------------------------------------------
+is_key <- function(x)
+{
+  #grepl("^(HP)?\\d+$", x)
+  x != "" & !grepl("^-+$", x)
+}
+
+# merge_fields_by_hour ---------------------------------------------------------
+merge_fields_by_hour <- function(data)
+{
+  sets <- split(data, factor(data$hr, levels = unique(data$hr)))
+  #set <- sets[[4]]
+  #data[1:5, ]
+  new_sets <- lapply(X = sets, FUN = function(set) {
+    as.data.frame(lapply(set[-1L], function(x) {
+      paste(x[x != ""], collapse = "/")
+    }))
+  })
+  dplyr::bind_rows(new_sets, .id = "hr")
+}
+
 # get_full_class_table ---------------------------------------------------------
 get_full_class_table <- function(file)
 {
-  class_tables <- read_time_tables(file)
+  #file = file_classes_3
+  tables <- read_time_tables(file)
+  class_tables <- repair_tables(tables)
   class_data_raw <- merge_tables(class_tables, id = "class")
-  class_data <- split_composed_fields(class_data_raw)
+  class_data <- split_composed_fields(data = class_data_raw)
   lookup_class <- create_lookup_table_class(composed = gsub("ESSEN (\\d)", "ESSEN-\\1", class_data$composed))
   result <- dplyr::left_join(class_data, lookup_class, by = "composed")
   result$weekday <- to_weekday_factor(result$weekday)
-  result <- kwb.utils::moveColumnsToFront(
-    result, 
-    c("class", "weekday", "hr", "subject", "teacher", "room")
-  )
+  columns <- c("class", "weekday", "hr", "subject", "teacher", "room")
+  result <- kwb.utils::moveColumnsToFront(result, columns)
   kwb.utils::fullySorted(result)
 }
 
@@ -85,7 +201,11 @@ create_lookup_table_teacher <- function(composed)
   is_subject_only <- n_parts == 1L & first_is_subject
   
   considered <- is_class_triple | is_class_pair | is_room_pair | is_subject_only
-  print(parts[!considered])
+  
+  if (any(!considered)) {
+    cat("Not considered:\n")
+    print(sapply(parts[!considered], paste, collapse = "|"))
+  }
   
   combined <- dplyr::bind_rows(
     lookup_class_triple, 
@@ -129,18 +249,24 @@ create_lookup_table_class <- function(composed)
   is_triple <- n_parts == 3L
   
   combined <- dplyr::bind_rows(
-    cbind(
-      split_into(x = parts[is_triple], columns = c("subject", "room", "teacher")),
-      composed = composed[is_triple]
-    ),
-    cbind(
-      split_into(x = parts[is_pair], columns = c("subject", "teacher")),
-      composed = composed[is_pair]
-    ),
-    cbind(
-      split_into(x = parts[is_single], columns = c("teacher")),
-      composed = composed[is_single]
-    )
+    if (any(is_triple)) {
+      cbind(
+        split_into(x = parts[is_triple], columns = c("subject", "room", "teacher")),
+        composed = composed[is_triple]
+      )      
+    },
+    if (any(is_pair)) {
+      cbind(
+        split_into(x = parts[is_pair], columns = c("subject", "teacher")),
+        composed = composed[is_pair]
+      )
+    },
+    if (any(is_single)) {
+      cbind(
+        split_into(x = parts[is_single], columns = c("teacher")),
+        composed = composed[is_single]
+      )
+    }
   )
   
   kwb.utils::moveColumnsToFront(combined, "composed")  

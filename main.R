@@ -13,10 +13,13 @@ kwb.utils::loadFunctions(c(
   file_teachers <- "C:/Users/hsonne/Downloads/L/lernfoerderung/Lehrer Neu 2024-2025.pdf"
   file_classes_1 <- "C:/Users/hsonne/Downloads/L/lernfoerderung/Klassen Neu 2024-2025.pdf"
   file_classes_2 <- "C:/Users/hsonne/Downloads/L/lernfoerderung/Klassen Neu2 024-2025.pdf"
+  file_classes_3 <- "C:/Users/hsonne/Downloads/L/lernfoerderung/Klassen 2024-09-27 13-10.pdf"
   
   teacher_data <- get_full_teacher_table(file = file_teachers)
+  
   class_data_1 <- get_full_class_table(file = file_classes_1)
   class_data_2 <- get_full_class_table(file = file_classes_2)
+  class_data_3 <- get_full_class_table(file = file_classes_3)
 }
 
 # Have a look at the data ------------------------------------------------------
@@ -48,6 +51,7 @@ kwb.utils::loadFunctions(c(
   
   class_data_1$weekday_hr <- get_weekday_hr(class_data_1)
   class_data_2$weekday_hr <- get_weekday_hr(class_data_2)
+  class_data_3$weekday_hr <- get_weekday_hr(class_data_3)
   
   class_data <- class_data_1
   
@@ -95,6 +99,7 @@ kwb.utils::loadFunctions(c(
   
   my_write(my_filter(class_data_1), "ems_classes_deu_1.txt")
   my_write(my_filter(class_data_2), "ems_classes_deu_2.txt")
+  my_write(my_filter(class_data_3), "ems_classes_deu_3.txt")
   
   #kwb.utils::hsOpenWindowsExplorer(tempdir())
 }
