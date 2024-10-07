@@ -5,6 +5,7 @@
 
 kwb.utils::loadFunctions(c(
   "functions.R",
+  "helpers.R",
   "read_time_tables.R",
   "views.R"
 ))
@@ -48,13 +49,6 @@ kwb.utils::loadFunctions(c(
   cmp(get_teachers(teacher_data), get_teachers(class_data_1))
   cmp(get_teachers(class_data_2), get_teachers(class_data_1))
 
-  get_weekday_hr <- function(data) factor(
-    kwb.utils::pasteColumns(data, c("weekday", "hr"), "-"), 
-    levels = grep("HP", invert = TRUE, value = TRUE, kwb.utils::pasteColumns(
-      kwb.utils::fullySorted(unique(data[, c("weekday", "hr")])), sep = "-"
-    ))
-  )
-  
   class_data_1$weekday_hr <- get_weekday_hr(class_data_1)
   class_data_2$weekday_hr <- get_weekday_hr(class_data_2)
   class_data_3$weekday_hr <- get_weekday_hr(class_data_3)
