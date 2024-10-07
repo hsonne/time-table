@@ -5,7 +5,8 @@
 
 kwb.utils::loadFunctions(c(
   "functions.R",
-  "read_time_tables.R"
+  "read_time_tables.R",
+  "views.R"
 ))
 
 # Read all pdf files -----------------------------------------------------------
@@ -20,6 +21,11 @@ kwb.utils::loadFunctions(c(
   class_data_1 <- get_full_class_table(file = file_classes_1)
   class_data_2 <- get_full_class_table(file = file_classes_2)
   class_data_3 <- get_full_class_table(file = file_classes_3)
+  
+  get_free_periods(class_data = class_data_3)
+  get_free_periods(class_data = class_data_3, transpose = TRUE)
+  get_free_periods(class_data = class_data_3, layout = 2L)
+  get_free_periods(class_data = class_data_3, layout = 2L, transpose = TRUE)
 }
 
 # Have a look at the data ------------------------------------------------------
