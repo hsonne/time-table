@@ -22,37 +22,36 @@ kwb.utils::loadFunctions(c(
   class_data_1 <- get_full_class_table(file = file_classes_1)
   class_data_2 <- get_full_class_table(file = file_classes_2)
   class_data_3 <- get_full_class_table(file = file_classes_3)
+}
+
+# Have a first look at the data ------------------------------------------------
+{
+  my_print <- function(data) print(head(unify(data)))
   
+  my_print(teacher_data)
+  my_print(class_data_1)
+  my_print(class_data_2)
+  my_print(class_data_3)
+}
+
+# Identify free periods per class ----------------------------------------------
+{
   get_free_periods(class_data = class_data_3)
   get_free_periods(class_data = class_data_3, transpose = TRUE)
   get_free_periods(class_data = class_data_3, layout = 2L)
   get_free_periods(class_data = class_data_3, layout = 2L, transpose = TRUE)
 }
 
-# Have a look at the data ------------------------------------------------------
+# Compare teacher names as extracted from class/teacher timetables -------------
 {
-  column_order <- c("weekday", "hr", "teacher", "class", "subject", "room")
-  
-  unify <- function(data) kwb.utils::fullySorted(
-    kwb.utils::moveColumnsToFront(data, column_order)
-  )
-  
-  my_print <- function(data) print(head(unify(data)))
-  
-  my_print(teacher_data)
-  my_print(class_data_1)
-  my_print(class_data_2)
-  
   get_teachers <- function(data) sort(unique(data$teacher))
   cmp <- kwb.utils::compareSets
-  
   cmp(get_teachers(teacher_data), get_teachers(class_data_1))
   cmp(get_teachers(class_data_2), get_teachers(class_data_1))
+}
 
-  class_data_1$weekday_hr <- get_weekday_hr(class_data_1)
-  class_data_2$weekday_hr <- get_weekday_hr(class_data_2)
-  class_data_3$weekday_hr <- get_weekday_hr(class_data_3)
-  
+# Count occurrences of value combinations in pairs of columns ------------------
+{
   class_data <- class_data_1
   
   get_combis <- function(..., data = class_data) {
@@ -64,7 +63,10 @@ kwb.utils::loadFunctions(c(
   get_combis("room", "subject")
   get_combis("room", "weekday")
   get_combis("weekday_hr", "room")
+}
 
+# When are the German classes? -------------------------------------------------
+{
   get_deu_combis <- function(..., data = class_data) {
     as.matrix(kwb.utils::countOrSum(data[data$subject == "Deu", ], c(...)))
   }
@@ -72,19 +74,9 @@ kwb.utils::loadFunctions(c(
   v1 <- get_deu_combis("weekday_hr", "class", data = class_data_1)
   v2 <- get_deu_combis("weekday_hr", "class", data = class_data_2)
 
-  int_removed <- -1L
-  int_added <- 2L
-  v1_v2_diff <- v2
-  v1_v2_diff[v1 == 0L & v2 == 1L] <- int_added
-  v1_v2_diff[v1 == 1L & v2 == 0L] <- int_removed
-  has_changed <- v1_v2_diff == int_added | v1_v2_diff == int_removed
-  
-  any_in_row <- function(x) rowSums(x) > 0L
-  any_in_col <- function(x) colSums(x) > 0L
-  
-  v2[any_in_row(v2), ]
-  v1_v2_diff[any_in_row(has_changed), any_in_col(has_changed)]
-  v1_v2_diff
+  diff_matrix <- compare_int_matrices(v1, v2)
+  diff_matrix
+  filter_for_changes(diff_matrix)
 }
 
 # Write data to text files for comparison -------------------------------------- 

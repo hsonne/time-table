@@ -1,3 +1,13 @@
+# compare_int_matrices ---------------------------------------------------------
+compare_int_matrices <- function(v1, v2, int_removed = -1L, int_added = 2L)
+{
+  stopifnot(identical(dim(v1), dim(v2)))
+  diff_matrix <- v2
+  diff_matrix[v1 == 0L & v2 == 1L] <- int_added
+  diff_matrix[v1 == 1L & v2 == 0L] <- int_removed
+  structure(diff_matrix, int_removed = int_removed, int_added = int_added)
+}
+
 # fill_gaps_with_neighbours ----------------------------------------------------
 fill_gaps_with_neighbours <- function(
     x, is_ok = is_key, prefer = function(a, b) a < b
@@ -21,6 +31,17 @@ fill_gaps_with_neighbours <- function(
     i_last <- i
   }
   x
+}
+
+# filter_for_changes -----------------------------------------------------------
+filter_for_changes <- function(diff_matrix)
+{
+  int_added <- kwb.utils::getAttribute(diff_matrix, "int_added")
+  int_removed <- kwb.utils::getAttribute(diff_matrix, "int_removed")
+  has_changed <- diff_matrix == int_added | diff_matrix == int_removed
+  any_in_row <- function(x) rowSums(x) > 0L
+  any_in_col <- function(x) colSums(x) > 0L
+  diff_matrix[any_in_row(has_changed), any_in_col(has_changed)]
 }
 
 # get_weekday_hr ---------------------------------------------------------------
@@ -138,4 +159,11 @@ split_into <- function(x, columns)
 to_weekday_factor <- function(x)
 {
   factor(x, levels = c("Mo", "Di", "Mi", "Do", "Fr"))
+}
+
+# unify ------------------------------------------------------------------------
+unify <- function(data)
+{
+  column_order <- c("weekday", "hr", "teacher", "class", "subject", "room")  
+  kwb.utils::fullySorted(kwb.utils::moveColumnsToFront(data, column_order))
 }

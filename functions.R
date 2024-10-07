@@ -25,6 +25,7 @@ get_full_class_table <- function(file)
   result$weekday <- to_weekday_factor(result$weekday)
   columns <- c("class", "weekday", "hr", "subject", "teacher", "room")
   result <- kwb.utils::moveColumnsToFront(result, columns)
+  result$weekday_hr <- get_weekday_hr(result)
   kwb.utils::fullySorted(result)
 }
 
