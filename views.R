@@ -17,8 +17,8 @@ get_free_periods <- function(class_data, layout = 1L, transpose = FALSE)
   
   if (layout == 1L) {
     mode(m) <- "character"
-    m[m == "FALSE"] <- "|"
-    m[m == "TRUE"] <- "X"
+    m[m == "FALSE"] <- "\xF0\x9F\x98\xA1"
+    m[m == "TRUE"] <- "\xF0\x9F\x98\x83"
   }
   
   if (layout == 2L) {
