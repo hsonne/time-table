@@ -13,16 +13,17 @@ fill_gaps_with_neighbours <- function(
     x, is_ok = is_key, prefer = function(a, b) a < b
 )
 {
-  left_of <- function(x) c("", x[-length(x)])
-  right_of <- function(x) c(x[-1L], "")
+  pred <- function(x) c("", x[-length(x)])
+  succ <- function(x) c(x[-1L], "")
   i_last <- NULL
+  
   while (TRUE) {
     i <- which(x == "")
     if (!is.null(i_last) && identical(i, i_last)) {
       break
     }
-    left <- left_of(x)[i]
-    right <- right_of(x)[i]
+    left <- pred(x)[i]
+    right <- succ(x)[i]
     use_left <- is_ok(left) & (!is_ok(right) | prefer(left, right))
     use_right <- is_ok(right) & (!is_ok(left) | prefer(right, left))
     stopifnot(sum(use_left & use_right) == 0L)
